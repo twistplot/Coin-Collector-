@@ -610,9 +610,347 @@
             const leaderboardBody = document.getElementById('leaderboard-body');
             
             // Set canvas size
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+            function resizeCanvas() {
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+                // Reset player position when resizing
+                if (player) {
+                    player.x = canvas.width / 2;
+                    player.y = canvas.height - 50;
+                }
+            }
+            
+            // Initial resize
+            resizeCanvas();
             
             // Game variables
             let score = 0;
-            let highScore = localStorage.getItem
+            let highScore = localStorage.getItem('highScore') || 0;
+            let gameRunning = false;
+            let animationId;
+            
+            // Load leaderboard from local storage
+            let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+            updateLeaderboardDisplay();
+            
+            highScoreDisplay.textContent = highScore;
+            
+            // Player
+            const player = {
+                x: canvas.width / 2,
+                y: canvas.height - 50,
+                size: 30,
+                speed: 8,
+                color: '#14F195'
+            };
+            
+            // Coins
+            let coins = [];
+            const coinColors = ['#9945FF', '#14F195', '#FFD700', '#FF5733'];
+            
+            // Obstacles
+            let obstacles = [];
+            const obstacleColors = ['#FF0000', '#FF5733', '#C70039'];
+            
+            // Stars background
+            let stars = [];
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 3 + 1
+                });
+            }
+            
+            // Event listeners
+            startBtn.addEventListener('click', startGame);
+            window.addEventListener('keydown', handleKeyPress);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('touchmove', handleTouchMove);
+            window.addEventListener('resize', resizeCanvas);
+            
+            function handleMouseMove(e) {
+                if (gameRunning) {
+                    const rect = canvas.getBoundingClientRect();
+                    player.x = e.clientX - rect.left;
+                    // Keep player within canvas bounds
+                    player.x = Math.max(player.size / 2, Math.min(player.x, canvas.width - player.size / 2));
+                }
+            }
+            
+            function handleTouchMove(e) {
+                if (gameRunning) {
+                    e.preventDefault();
+                    const rect = canvas.getBoundingClientRect();
+                    player.x = e.touches[0].clientX - rect.left;
+                    // Keep player within canvas bounds
+                    player.x = Math.max(player.size / 2, Math.min(player.x, canvas.width - player.size / 2));
+                }
+            }
+            
+            function handleKeyPress(e) {
+                if (gameRunning) {
+                    if (e.key === 'ArrowLeft' && player.x > player.size / 2) {
+                        player.x -= player.speed;
+                    }
+                    if (e.key === 'ArrowRight' && player.x < canvas.width - player.size / 2) {
+                        player.x += player.speed;
+                    }
+                }
+            }
+            
+            function startGame() {
+                score = 0;
+                coins = [];
+                obstacles = [];
+                gameRunning = true;
+                gameOverlay.style.display = 'none';
+                scoreDisplay.textContent = score;
+                
+                // Reset player position
+                player.x = canvas.width / 2;
+                player.y = canvas.height - 50;
+                
+                // Start game loop
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                }
+                gameLoop();
+            }
+            
+            function endGame() {
+                gameRunning = false;
+                cancelAnimationFrame(animationId);
+                
+                // Update high score
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('highScore', highScore);
+                    highScoreDisplay.textContent = highScore;
+                }
+                
+                // Add to leaderboard
+                addToLeaderboard(score);
+                
+                gameOverlay.style.display = 'flex';
+                gameOverlay.querySelector('h3').textContent = `Game Over! Score: ${score}`;
+                startBtn.textContent = 'Play Again';
+            }
+            
+            function addToLeaderboard(score) {
+                const entry = {
+                    name: 'Player',
+                    score: score,
+                    date: new Date().toLocaleDateString()
+                };
+                
+                leaderboard.push(entry);
+                // Sort by score (descending)
+                leaderboard.sort((a, b) => b.score - a.score);
+                // Keep only top 10
+                leaderboard = leaderboard.slice(0, 10);
+                
+                localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+                updateLeaderboardDisplay();
+            }
+            
+            function updateLeaderboardDisplay() {
+                leaderboardBody.innerHTML = '';
+                
+                if (leaderboard.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4" style="text-align: center;">Play a game to appear here!</td>`;
+                    leaderboardBody.appendChild(row);
+                    return;
+                }
+                
+                leaderboard.forEach((entry, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="rank">${index + 1}</td>
+                        <td class="player-name">${entry.name}</td>
+                        <td>${entry.score}</td>
+                        <td>${entry.date}</td>
+                    `;
+                    leaderboardBody.appendChild(row);
+                });
+            }
+            
+            function spawnCoin() {
+                if (Math.random() < 0.03) {
+                    coins.push({
+                        x: Math.random() * (canvas.width - 30) + 15,
+                        y: -30,
+                        size: 20,
+                        speed: Math.random() * 3 + 2,
+                        color: coinColors[Math.floor(Math.random() * coinColors.length)],
+                        value: Math.floor(Math.random() * 3) + 1
+                    });
+                }
+            }
+            
+            function spawnObstacle() {
+                if (Math.random() < 0.02) {
+                    obstacles.push({
+                        x: Math.random() * (canvas.width - 50) + 25,
+                        y: -50,
+                        width: Math.random() * 50 + 30,
+                        height: Math.random() * 30 + 20,
+                        speed: Math.random() * 4 + 3,
+                        color: obstacleColors[Math.floor(Math.random() * obstacleColors.length)]
+                    });
+                }
+            }
+            
+            function updateGame() {
+                // Spawn new coins and obstacles
+                spawnCoin();
+                spawnObstacle();
+                
+                // Update coins
+                for (let i = coins.length - 1; i >= 0; i--) {
+                    coins[i].y += coins[i].speed;
+                    
+                    // Check collision with player
+                    const dx = player.x - coins[i].x;
+                    const dy = player.y - coins[i].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < (player.size / 2 + coins[i].size / 2)) {
+                        // Collect coin
+                        score += coins[i].value;
+                        scoreDisplay.textContent = score;
+                        
+                        // Remove coin
+                        coins.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Remove coins that go off screen
+                    if (coins[i].y > canvas.height + coins[i].size) {
+                        coins.splice(i, 1);
+                    }
+                }
+                
+                // Update obstacles
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].y += obstacles[i].speed;
+                    
+                    // Check collision with player
+                    if (
+                        player.x + player.size / 2 > obstacles[i].x - obstacles[i].width / 2 &&
+                        player.x - player.size / 2 < obstacles[i].x + obstacles[i].width / 2 &&
+                        player.y + player.size / 2 > obstacles[i].y - obstacles[i].height / 2 &&
+                        player.y - player.size / 2 < obstacles[i].y + obstacles[i].height / 2
+                    ) {
+                        endGame();
+                        return;
+                    }
+                    
+                    // Remove obstacles that go off screen
+                    if (obstacles[i].y > canvas.height + obstacles[i].height) {
+                        obstacles.splice(i, 1);
+                    }
+                }
+                
+                // Update stars
+                for (let i = 0; i < stars.length; i++) {
+                    stars[i].y += stars[i].speed;
+                    if (stars[i].y > canvas.height) {
+                        stars[i].y = 0;
+                        stars[i].x = Math.random() * canvas.width;
+                    }
+                }
+            }
+            
+            function drawGame() {
+                // Clear canvas
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw stars
+                ctx.fillStyle = 'white';
+                for (let i = 0; i < stars.length; i++) {
+                    ctx.beginPath();
+                    ctx.arc(stars[i].x, stars[i].y, stars[i].size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Draw coins
+                for (let i = 0; i < coins.length; i++) {
+                    ctx.fillStyle = coins[i].color;
+                    ctx.beginPath();
+                    ctx.arc(coins[i].x, coins[i].y, coins[i].size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Add shine to coin
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.beginPath();
+                    ctx.arc(
+                        coins[i].x - coins[i].size * 0.3,
+                        coins[i].y - coins[i].size * 0.3,
+                        coins[i].size * 0.2,
+                        0,
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+                
+                // Draw obstacles
+                for (let i = 0; i < obstacles.length; i++) {
+                    ctx.fillStyle = obstacles[i].color;
+                    ctx.fillRect(
+                        obstacles[i].x - obstacles[i].width / 2,
+                        obstacles[i].y - obstacles[i].height / 2,
+                        obstacles[i].width,
+                        obstacles[i].height
+                    );
+                    
+                    // Add some detail to obstacles
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.fillRect(
+                        obstacles[i].x - obstacles[i].width / 4,
+                        obstacles[i].y - obstacles[i].height / 4,
+                        obstacles[i].width / 2,
+                        obstacles[i].height / 2
+                    );
+                }
+                
+                // Draw player (as a spaceship)
+                ctx.fillStyle = player.color;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y - player.size / 2);
+                ctx.lineTo(player.x + player.size / 2, player.y + player.size / 2);
+                ctx.lineTo(player.x - player.size / 2, player.y + player.size / 2);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Add engine glow
+                ctx.fillStyle = 'rgba(20, 241, 149, 0.5)';
+                ctx.beginPath();
+                ctx.moveTo(player.x - player.size / 4, player.y + player.size / 2);
+                ctx.lineTo(player.x, player.y + player.size);
+                ctx.lineTo(player.x + player.size / 4, player.y + player.size / 2);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Add cockpit
+                ctx.fillStyle = 'rgba(153, 69, 255, 0.7)';
+                ctx.beginPath();
+                ctx.arc(player.x, player.y - player.size / 6, player.size / 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            function gameLoop() {
+                if (!gameRunning) return;
+                
+                updateGame();
+                drawGame();
+                
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        });
+    </script>
+</body>
+</html>
